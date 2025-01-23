@@ -2,8 +2,8 @@
 // @name         Linear Issues Selector with Dynamic Date and Project Filter
 // @namespace    http://tampermonkey.net/
 // @version      1.1
-// @description  Fetch and display Linear issues updated since yesterday for the selected project.
-// @author       Your Name
+// @description  Fetch and display Linear issues updated since yesterday for the selected project and enhance the TRS entry experience
+// @author       Luke Watson-Davies
 // @match        http://trs.office.cogapp.com/timereportentry/create*
 // @grant        GM_xmlhttpRequest
 // ==/UserScript==
@@ -26,6 +26,12 @@
         { name: 'Getty', id: '1573' },
         { name: 'Holiday', id: '1368' },
     ];
+
+    const shortcutAreas = [
+        { name: "PM", match: "project management" },
+        { name: "Dev", match: "development" }
+    ];
+
     // Function to create shortcut buttons
     function addProjectShortcuts() {
         // Find the project select element
@@ -61,8 +67,8 @@
         projectSelect.parentNode.insertBefore(shortcutContainer, projectSelect.nextSibling);
     }
 
-    // Function to add the "PM" button under the Area select
-    function addPMButton() {
+    // Function to add shortcut buttons for areas
+    function addAreaShortcuts() {
         // Find the Area select element
         const areaSelect = document.getElementById('area_select');
         if (!areaSelect) {
@@ -70,43 +76,42 @@
             return;
         }
 
-        // Remove existing PM button if it exists
-        const existingButton = document.getElementById('pm_button');
-        if (existingButton) {
-            existingButton.remove();
-        }
+        // Remove existing shortcut buttons if they exist
+        const existingButtons = document.querySelectorAll('.area-shortcut-button');
+        existingButtons.forEach(button => button.remove());
 
-        // Create the "PM" button
-        const pmButton = document.createElement('button');
-        pmButton.id = 'pm_button';
-        pmButton.type = 'button';
-        pmButton.className = 'btn btn-outline-primary'; // Use your existing button styles
-        pmButton.textContent = 'PM';
-        pmButton.style.marginTop = '10px';
+        // Create a button for each shortcut area
+        shortcutAreas.forEach((area) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-outline-primary area-shortcut-button'; // Bootstrap styling and custom class
+            button.textContent = area.name;
+            button.style.marginTop = '10px';
 
-        // Add click event to set the Area select value
-        pmButton.addEventListener('click', () => {
-            let pmOptionFound = false;
-            Array.from(areaSelect.options).forEach((option) => {
-                if (option.textContent.toLowerCase().includes('project management')) {
-                    areaSelect.value = option.value; // Set the select value
-                    pmOptionFound = true;
-                    areaSelect.dispatchEvent(new Event('change')); // Trigger the onchange event
+            // Add click event to set the Area select value
+            button.addEventListener('click', () => {
+                let optionFound = false;
+                Array.from(areaSelect.options).forEach((option) => {
+                    if (option.textContent.toLowerCase().includes(area.match.toLowerCase())) {
+                        areaSelect.value = option.value; // Set the select value
+                        optionFound = true;
+                        areaSelect.dispatchEvent(new Event('change')); // Trigger the onchange event
+                    }
+                });
+
+                if (!optionFound) {
+                    console.warn(`No option with "${area.match}" found.`);
                 }
             });
 
-            if (!pmOptionFound) {
-                console.warn('No option with "Project management" found.');
+            // Append the button under the Area select
+            const areaDiv = document.getElementById('area_div');
+            if (areaDiv) {
+                areaDiv.appendChild(button);
+            } else {
+                console.error('Area div not found.');
             }
         });
-
-        // Append the button under the Area select
-        const areaDiv = document.getElementById('area_div');
-        if (areaDiv) {
-            areaDiv.appendChild(pmButton);
-        } else {
-            console.error('Area div not found.');
-        }
     }
 
     // Function to inject CSS into the page
@@ -307,6 +312,13 @@
                 console.log('found existing select');
                 existingSelect.remove();
             }
+
+             // Skip Linear issues fetching if the API token is blank
+            if (!LINEAR_API_TOKEN) {
+                console.warn('LINEAR_API_TOKEN is blank. Skipping Linear issues fetching.');
+                return;
+            }
+
             let issues = await fetchLinearIssues(teamIdentifier);
 
             // If no issues are returned, re-run the query without the team filter
@@ -394,7 +406,7 @@
             }
             // Call addPMButton to update the PM button for the updated "Area" options
             setTimeout(() => {
-                addPMButton();
+                addAreaShortcuts();
             }, 100); // Delay to ensure the "Area" options are updated
         });
     } else {
